@@ -1094,10 +1094,11 @@ _PROVIDER_MODELS = {
         {"id": "deepseek-reasoner", "label": "DeepSeek Reasoner (legacy)"},
     ],
     "nous": [
-        {"id": "@nous:anthropic/claude-opus-4.6",     "label": "Claude Opus 4.6 (via Nous)"},
-        {"id": "@nous:anthropic/claude-sonnet-4.6",   "label": "Claude Sonnet 4.6 (via Nous)"},
-        {"id": "@nous:openai/gpt-5.4-mini",           "label": "GPT-5.4 Mini (via Nous)"},
-        {"id": "@nous:google/gemini-3.1-pro-preview", "label": "Gemini 3.1 Pro Preview (via Nous)"},
+        {"id": "@nous:anthropic/claude-opus-4.6",           "label": "Claude Opus 4.6 (via Nous)"},
+        {"id": "@nous:anthropic/claude-sonnet-4.6",         "label": "Claude Sonnet 4.6 (via Nous)"},
+        {"id": "@nous:openai/gpt-5.4-mini",                 "label": "GPT-5.4 Mini (via Nous)"},
+        {"id": "@nous:google/gemini-3.1-pro-preview",       "label": "Gemini 3.1 Pro Preview (via Nous)"},
+        {"id": "@nous:stepfun/step-3.7-flash:free",         "label": "Step 3.7 Flash (Free, via Nous)"},
     ],
     "zai": [
         {"id": "glm-5.1", "label": "GLM-5.1"},
