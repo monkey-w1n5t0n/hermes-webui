@@ -857,6 +857,24 @@ const PENDING_SESSION_MODEL_MAX_AGE_MS=10*60*1000;
 // When a preferred provider is supplied, duplicate normalized IDs prefer that
 // provider's option so Settings/profile rehydration doesn't snap back to the
 // first colliding entry.
+// Parse the provider hint out of an "@provider:model" value. Standard
+// providers are a single colon-free token; only custom providers carry an
+// internal colon ("custom:slug"). Splitting on the LAST colon breaks when the
+// MODEL id contains a ':' tag (e.g. ".../step-3.7-flash:free") — it would yield
+// provider="nous:.../step-3.7-flash" and the selection silently reverts to the
+// default model. Detect that (hint contains '/' or a non-custom ':') and
+// re-split on the FIRST colon. Mirrors the server's
+// _split_provider_qualified_model (#1744).
+function _providerHintFromQualified(value){
+  const v=String(value||'').trim();
+  if(!(v.startsWith('@')&&v.includes(':'))) return '';
+  const inner=v.slice(1);
+  let hint=inner.slice(0,inner.lastIndexOf(':'));
+  if(hint.includes('/')||(hint.includes(':')&&!hint.startsWith('custom:'))){
+    hint=inner.slice(0,inner.indexOf(':'));
+  }
+  return hint;
+}
 function _getOptionProviderId(opt){
   if(!opt) return '';
   if(opt.dataset && opt.dataset.provider) return opt.dataset.provider;
@@ -865,13 +883,11 @@ function _getOptionProviderId(opt){
     return group.dataset.provider;
   }
   const value=String(opt.value||'');
-  if(value.startsWith('@') && value.includes(':')) return value.slice(1,value.lastIndexOf(':'));
+  if(value.startsWith('@') && value.includes(':')) return _providerHintFromQualified(value);
   return '';
 }
 function _providerFromModelValue(modelId){
-  const value=String(modelId||'').trim();
-  if(value.startsWith('@')&&value.includes(':')) return value.slice(1,value.lastIndexOf(':'));
-  return '';
+  return _providerHintFromQualified(modelId);
 }
 function _providerSkipsModelMismatchWarning(providerId){
   const p=String(providerId||'').toLowerCase();
@@ -1059,11 +1075,8 @@ function _findModelInDropdown(modelId, sel, preferredProviderId){
   // Also strip @provider: prefix from deduplicated model IDs (#1228, #1313).
   const norm=s=>s.toLowerCase().replace(/^[^/]+\//,'').replace(/^@([^:]+:)+/,'').replace(/-/g,'.');
   const target=norm(modelId);
-  let explicitProvider='';
   const rawModel=String(modelId||'');
-  if(rawModel.startsWith('@')&&rawModel.includes(':')){
-    explicitProvider=rawModel.slice(1,rawModel.lastIndexOf(':'));
-  }
+  const explicitProvider=_providerHintFromQualified(rawModel);
   const preferred=String(preferredProviderId||explicitProvider||'').toLowerCase();
   if(preferred){
     const providerMatch=options.find(o=>norm(o.value)===target && _getOptionProviderId(o).toLowerCase()===preferred);

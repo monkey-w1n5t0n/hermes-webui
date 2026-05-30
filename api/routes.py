@@ -1011,6 +1011,8 @@ from api.config import (
     save_settings,
     set_hermes_default_model,
     model_with_provider_context,
+    _PROVIDER_MODELS,
+    _PROVIDER_DISPLAY,
     get_reasoning_status,
     set_reasoning_display,
     set_reasoning_effort,
@@ -1717,7 +1719,10 @@ def _model_matches_active_provider_family(
 def _catalog_model_id_matches(candidate: str, model: str) -> bool:
     candidate = str(candidate or "").strip()
     if candidate.startswith("@") and ":" in candidate:
-        candidate = candidate.rsplit(":", 1)[1]
+        # Strip the @provider: prefix using the shared parser so model IDs that
+        # contain their own ':' tags (e.g. ".../step-3.7-flash:free") keep the
+        # suffix instead of collapsing to the tag.
+        candidate, _provider = _split_provider_qualified_model(candidate)
     if "/" in candidate:
         candidate = candidate.split("/", 1)[1]
     return candidate.replace("-", ".").lower() == model.replace("-", ".").lower()
@@ -1735,7 +1740,21 @@ def _clean_session_model_provider(value: str | None) -> str | None:
 def _split_provider_qualified_model(model: str) -> tuple[str, str | None]:
     model = str(model or "").strip()
     if model.startswith("@") and ":" in model:
-        provider_hint, bare_model = model[1:].rsplit(":", 1)
+        inner = model[1:]
+        # rsplit handles provider ids that themselves contain ':' (e.g.
+        # "custom:my-key" → "@custom:my-key:model"). BUT model IDs ending in
+        # :free / :beta / :thinking collide with that grammar —
+        # "@nous:stepfun/step-3.7-flash:free" would mis-split into
+        # provider="nous:stepfun/step-3.7-flash", model="free", so the "nous"
+        # provider is never recognised and chat/start reverts to the default
+        # model. Mirror api.config.resolve_model_provider (#1744): when the
+        # rsplit provider hint is not a recognised provider, re-split on the
+        # FIRST colon instead.
+        provider_hint, bare_model = inner.rsplit(":", 1)
+        if (provider_hint not in _PROVIDER_MODELS
+                and provider_hint not in _PROVIDER_DISPLAY
+                and not provider_hint.startswith("custom:")):
+            provider_hint, bare_model = inner.split(":", 1)
         provider = _clean_session_model_provider(provider_hint)
         bare = bare_model.strip()
         if provider and bare:
