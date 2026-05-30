@@ -841,6 +841,11 @@ window.addEventListener('visibilitychange',()=>{
 
 // Dynamic model labels -- populated by populateModelDropdown(), fallback to static map
 let _dynamicModelLabels={};
+// Full extras catalog (non-featured models) keyed by group label.
+// Populated by populateModelDropdown(); used by renderModelDropdown() to
+// expand the search corpus when the user types, so every model is findable
+// even when the picker is capped to a featured subset.
+let _extraModelsByGroup={};
 window._configuredModelBadges=window._configuredModelBadges||{};
 const MODEL_STATE_KEY='hermes-webui-model-state';
 const PENDING_SESSION_MODEL_PREFIX='hermes-webui-pending-session-model:';
@@ -1225,6 +1230,7 @@ async function populateModelDropdown(opts={}){
     // Clear existing options
     sel.innerHTML='';
     _dynamicModelLabels={};
+    _extraModelsByGroup={};
     for(const g of groups){
       const og=document.createElement('optgroup');
       og.label=g.provider;
@@ -1248,8 +1254,14 @@ async function populateModelDropdown(opts={}){
       // persisted-localStorage value renderable with its proper label
       // instead of falling back to the bare ID. #1567.
       if(Array.isArray(g.extra_models)){
+        const _pid=og.dataset.provider||'';
+        const _gl=og.label||'';
+        if(!_extraModelsByGroup[_gl]) _extraModelsByGroup[_gl]={providerId:_pid,models:[]};
         for(const m of g.extra_models){
-          if(m && m.id) _dynamicModelLabels[m.id]=m.id;
+          if(m && m.id){
+            _dynamicModelLabels[m.id]=m.id;
+            _extraModelsByGroup[_gl].models.push(m);
+          }
         }
       }
       sel.appendChild(og);
@@ -1550,8 +1562,24 @@ function renderModelDropdown(){
   // Filter function (defined AFTER _searchRow and _cust* are created)
   const _filterModels=(term)=>{
     term=term.trim().toLowerCase();
+    // When the user is actively searching, expand the corpus to include the
+    // full extras catalog (non-featured models that aren't rendered as
+    // <option> elements). Empty-term render stays exactly as before.
+    let _searchData=_modelData;
+    if(term){
+      const _featuredIds=new Set(_modelData.map(m=>m.value));
+      const _extraEntries=[];
+      for(const [_gl,{providerId:_pid,models:_ms}] of Object.entries(_extraModelsByGroup)){
+        for(const _xm of _ms){
+          if(_xm&&_xm.id&&!_featuredIds.has(_xm.id)){
+            _extraEntries.push({value:_xm.id,name:esc(_xm.label||_xm.id),id:esc(_xm.id),group:_gl,providerId:_pid,modelsEndpointError:null,badge:null});
+          }
+        }
+      }
+      if(_extraEntries.length) _searchData=_modelData.concat(_extraEntries);
+    }
     const found=new Set();
-    for(const m of _modelData){
+    for(const m of _searchData){
       const name=m.name.toLowerCase();
       const id=m.id.toLowerCase();
       if(name.includes(term)||id.includes(term)){
@@ -1632,9 +1660,10 @@ function renderModelDropdown(){
     }
     // Add remaining models matching filter
     let _lastGroup=null;
-    // Count models per group for heading labels (#1425)
+    // Count models per group for heading labels (#1425) — use _searchData so
+    // extras that match the current search term are counted correctly.
     const _groupCounts={};
-    for(const m of _modelData){
+    for(const m of _searchData){
       if(configuredIds.has(m.value)) continue;
       if(m.group&&!m.endpointErrorOnly) _groupCounts[m.group]=(_groupCounts[m.group]||0)+1;
     }
@@ -1647,7 +1676,7 @@ function renderModelDropdown(){
       hint.textContent=entry.modelsEndpointError.message||'Models endpoint could not be reached for this provider.';
       dd.appendChild(hint);
     };
-    for(const m of _modelData){
+    for(const m of _searchData){
       if(configuredIds.has(m.value)||!matches(m)) continue;
       if(m.group&&m.group!==_lastGroup){
         const heading=document.createElement('div');
